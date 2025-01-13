@@ -313,6 +313,25 @@
 				"inputs": [
 					{
 						"internalType": "string",
+						"name": "",
+						"type": "string"
+					}
+				],
+				"name": "getGameIndex",
+				"outputs": [
+					{
+						"internalType": "uint8",
+						"name": "",
+						"type": "uint8"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "string",
 						"name": "_gameID",
 						"type": "string"
 					}
@@ -343,9 +362,9 @@
 						"type": "string"
 					},
 					{
-						"internalType": "bytes1",
-						"name": "_letter",
-						"type": "bytes1"
+						"internalType": "string",
+						"name": "_vote",
+						"type": "string"
 					}
 				],
 				"name": "voteForLetter",
@@ -383,10 +402,10 @@
 						"_gameID": "Identifier for the game."
 					}
 				},
-				"voteForLetter(string,bytes1)": {
+				"voteForLetter(string,string)": {
 					"params": {
 						"_gameID": "Identifier for the game.",
-						"_letter": "Letter to vote for."
+						"_vote": "Letter to vote for."
 					}
 				}
 			},
@@ -410,7 +429,7 @@
 				"leaveGame(string)": {
 					"notice": "Leave the game at any time while its active."
 				},
-				"voteForLetter(string,bytes1)": {
+				"voteForLetter(string,string)": {
 					"notice": "Vote for a letter in the hangman game."
 				}
 			},
@@ -434,11 +453,11 @@
 	},
 	"sources": {
 		"contracts/hangman.sol": {
-			"keccak256": "0xdf37ab61a410d4ef798025e34c635c5bce931a9206956c13d43cf6c90333c5d8",
+			"keccak256": "0xb8d7c3bbd5d799dea45b78486e3c5a60a982316ffcf9f7a922ac352d9cdae8a0",
 			"license": "UNLICENSED",
 			"urls": [
-				"bzz-raw://e772bad2edd6b7dd40ac2d0fecf491137603e5cc83aedf8f138e768440af7174",
-				"dweb:/ipfs/QmPavMFF6wj5RwcbUdEAGNfFvHaZWq2ttqR9wFGVoSdjUh"
+				"bzz-raw://35797b110097a53b1c13f30e76fee251ecaacd59f025f9846946a1481c335d35",
+				"dweb:/ipfs/Qmd7KJU2rVWsrSuBA8hSkFZyZapnL63pv3rLYGimbRf6PW"
 			]
 		}
 	},

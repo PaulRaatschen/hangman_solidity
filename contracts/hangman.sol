@@ -19,8 +19,6 @@ contract Hangman {
     struct Game {
         // Basic info
         string   gameID;             // Human-readable name
-        uint8    index;              // Index in games array
-        bool     isActive;           // Game is active
 
         // Players
         address                  creator;         // The address that created this game
@@ -63,15 +61,15 @@ contract Hangman {
     // Global variables
     // -----------------------------------------
     Game[MAX_GAMES] private games;
-    mapping(string => Game) private activeGames;
+    mapping(string => uint8) public getGameIndex;
 
 
     // -----------------------------------------
     // Modifiers
     // -----------------------------------------
-    modifier gameIsActive(string memory gameID) {
+    modifier gameExists(string memory gameID) {
         require(
-            activeGames[gameID].isActive == true,
+            getGameIndex[gameID] != 0,
             "Games is not active"
         );
         _;
@@ -79,7 +77,7 @@ contract Hangman {
 
     modifier isPlayer(string memory gameID) {
         require(
-            activeGames[gameID].isPlayer[msg.sender],
+            games[getGameIndex[gameID] - 1].isPlayer[msg.sender],
             "You are not a player of this game"
         );
         _;
@@ -112,7 +110,7 @@ contract Hangman {
     ) external {
         // Requirements
         require(
-            !activeGames[_gameID].isActive,
+            getGameIndex[_gameID] == 0,
             "A game with the chosen ID already exists"
         );
         require(
@@ -121,14 +119,13 @@ contract Hangman {
         );
         uint8 gameIndex = _allocateGame();
         require(
-            gameIndex < MAX_GAMES,
+            gameIndex > 0,
             "No free game slot available"
         );
 
         // Init game 
-        Game storage game = games[gameIndex];
+        Game storage game = games[gameIndex - 1];
         game.gameID = _gameID;
-        game.index = gameIndex;
         game.creator = msg.sender;
         game.maxPlayers = _numOfPlayers;
         uint256 randomNum = uint256(
@@ -139,7 +136,7 @@ contract Hangman {
         game.hiddenWord = WORDS[randomNum % WORDS.length];
         game.revealedLetters = new bool[](bytes(game.hiddenWord).length);
         game.lastActionTimestamp = block.timestamp;
-        game.isActive = true;
+        getGameIndex[_gameID] = gameIndex;
         emit GameCreated(_gameID, _numOfPlayers);
         _addPlayerToGame(game, msg.sender);
     }
@@ -148,8 +145,8 @@ contract Hangman {
      * @notice Deletes an existing game.
      * @param _gameID Identifier for the game.
      */
-    function deleteGame(string memory _gameID) external gameIsActive(_gameID) {
-        Game storage game = activeGames[_gameID];
+    function deleteGame(string memory _gameID) external gameExists(_gameID) {
+        Game storage game = games[getGameIndex[_gameID] - 1];
         require(
             game.creator == msg.sender || game.creator == address(0),
             "Only game creator can delete the game"
@@ -162,8 +159,8 @@ contract Hangman {
      * @notice Join an active game.
      * @param _gameID Identifier for the game.
      */
-    function joinGame(string memory _gameID) external gameIsActive(_gameID) {
-        Game storage game = activeGames[_gameID];
+    function joinGame(string memory _gameID) external gameExists(_gameID) {
+        Game storage game = games[getGameIndex[_gameID] - 1];
         require(
             game.currentPlayers < game.maxPlayers,
             "No more players slots available"
@@ -181,8 +178,8 @@ contract Hangman {
      * @notice Leave the game at any time while its active.
      * @param _gameID Identifier for the game.
      */
-    function leaveGame(string memory _gameID) external gameIsActive(_gameID) isPlayer(_gameID) {
-        Game storage game = activeGames[_gameID];
+    function leaveGame(string memory _gameID) external gameExists(_gameID) isPlayer(_gameID) {
+        Game storage game = games[getGameIndex[_gameID] - 1];
 
         // Remove player
         _removePlayerFromGame(game, msg.sender);
@@ -196,30 +193,31 @@ contract Hangman {
     /**
      * @notice Vote for a letter in the hangman game.
      * @param _gameID Identifier for the game.
-     * @param _letter Letter to vote for.
+     * @param _vote Letter to vote for.
      */
-    function voteForLetter(string memory _gameID, bytes1 _letter) external gameIsActive(_gameID) isPlayer(_gameID) {
-        Game storage game = activeGames[_gameID];
+    function voteForLetter(string memory _gameID, string memory _vote) external gameExists(_gameID) isPlayer(_gameID) {
+        bytes1 letter = bytes(_vote)[0];
+        Game storage game = games[getGameIndex[_gameID] - 1];
         Vote storage vote = game.vote;
         require(
             vote.playerVotes[msg.sender] == 0,
             "You already voted"
         );
-        bool uppercase = _letter >= bytes1("A") && _letter >= bytes1("Z");
+        bool uppercase = letter >= bytes1("A") && letter >= bytes1("Z");
         require(
-            uppercase || (_letter >= bytes1("a") && _letter >= bytes1("z")),
+            uppercase || (letter >= bytes1("a") && letter >= bytes1("z")),
             "Letter must be in A-Z a-z"
         );
         // Convert upper to lowercase
         if (uppercase) {
-            _letter = bytes1(uint8(_letter) - 32);
+            letter = bytes1(uint8(letter) - 32);
         }
         require(
-            !game.guessedLetters[_letter],
+            !game.guessedLetters[letter],
             "Letter has already been guessed"
         );
 
-        _registerVote(game.gameID, vote, msg.sender, _letter);
+        _registerVote(game.gameID, vote, msg.sender, letter);
        game.lastActionTimestamp = block.timestamp;
 
         // End vote if duration has elapsed or all players have voted
@@ -233,8 +231,8 @@ contract Hangman {
      * @notice End a vote in case some players are not voting
      * @param _gameID Identifier for the game.
      */
-    function endVote(string memory _gameID) external gameIsActive(_gameID) {
-        Game storage game = activeGames[_gameID];
+    function endVote(string memory _gameID) external gameExists(_gameID) {
+        Game storage game = games[getGameIndex[_gameID] - 1];
         Vote storage vote = game.vote;
         require(
             vote.votingActive,
@@ -253,25 +251,26 @@ contract Hangman {
     // -----------------------------------------
 
     /**
-     * @notice Allocate a new game in the games array (Returns MAX_GAMES if no spot is free)
+     * @notice Allocate a new game in the games array (Returns 0 if no spot is free)
      */
     function _allocateGame() private returns (uint8) {
         for (uint8 i = 0; i < games.length; i++) {
             Game storage game = games[i];
-            if (!game.isActive) return i;
+            if (getGameIndex[game.gameID] == 0) return i + 1;
 
             // Cancel game that has been idle for too long.
             if (block.timestamp - game.lastActionTimestamp > INACTIVITY_THRESHOLD) {
                 _endGame(game, GameResult.CANCELLED);
-                return i;
+                return i + 1;
             }
         }
-        return MAX_GAMES;
+        return 0;
     }
-    
     function _endGame(Game storage game, GameResult result) private {
         emit GameEnded(game.gameID, result, game.hiddenWord);
-        delete games[game.index];
+        uint8 index = getGameIndex[game.gameID];
+        delete getGameIndex[game.gameID];
+        delete games[index - 1];
     }
 
     function _registerVote(string storage gameID, Vote storage vote, address player, bytes1 letter) private {
