@@ -1,0 +1,446 @@
+{
+	"compiler": {
+		"version": "0.8.26+commit.8a97fa7a"
+	},
+	"language": "Solidity",
+	"output": {
+		"abi": [
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "string",
+						"name": "gameID",
+						"type": "string"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint8",
+						"name": "numOfPlayers",
+						"type": "uint8"
+					}
+				],
+				"name": "GameCreated",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "string",
+						"name": "gameID",
+						"type": "string"
+					},
+					{
+						"indexed": false,
+						"internalType": "enum Hangman.GameResult",
+						"name": "result",
+						"type": "uint8"
+					},
+					{
+						"indexed": false,
+						"internalType": "string",
+						"name": "solution",
+						"type": "string"
+					}
+				],
+				"name": "GameEnded",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "string",
+						"name": "gameID",
+						"type": "string"
+					},
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "player",
+						"type": "address"
+					}
+				],
+				"name": "PlayerJoined",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "string",
+						"name": "gameID",
+						"type": "string"
+					},
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "player",
+						"type": "address"
+					}
+				],
+				"name": "PlayerLeft",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "string",
+						"name": "gameID",
+						"type": "string"
+					},
+					{
+						"indexed": false,
+						"internalType": "bytes1",
+						"name": "chosenLetter",
+						"type": "bytes1"
+					},
+					{
+						"indexed": false,
+						"internalType": "string",
+						"name": "maskedWord",
+						"type": "string"
+					},
+					{
+						"indexed": false,
+						"internalType": "bool",
+						"name": "error",
+						"type": "bool"
+					}
+				],
+				"name": "VoteEnded",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": false,
+						"internalType": "string",
+						"name": "gameID",
+						"type": "string"
+					},
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "player",
+						"type": "address"
+					},
+					{
+						"indexed": false,
+						"internalType": "bytes1",
+						"name": "letter",
+						"type": "bytes1"
+					}
+				],
+				"name": "VoteRegistered",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "string",
+						"name": "gameID",
+						"type": "string"
+					}
+				],
+				"name": "VoteStarted",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": false,
+						"internalType": "string",
+						"name": "gameID",
+						"type": "string"
+					},
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "player",
+						"type": "address"
+					},
+					{
+						"indexed": false,
+						"internalType": "bytes1",
+						"name": "letter",
+						"type": "bytes1"
+					}
+				],
+				"name": "VoteUnregistered",
+				"type": "event"
+			},
+			{
+				"inputs": [],
+				"name": "INACTIVITY_THRESHOLD",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "MAX_GAMES",
+				"outputs": [
+					{
+						"internalType": "uint8",
+						"name": "",
+						"type": "uint8"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "MAX_GUESSES",
+				"outputs": [
+					{
+						"internalType": "uint8",
+						"name": "",
+						"type": "uint8"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "MAX_PLAYERS",
+				"outputs": [
+					{
+						"internalType": "uint8",
+						"name": "",
+						"type": "uint8"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "VOTING_DURATION",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"name": "WORDS",
+				"outputs": [
+					{
+						"internalType": "string",
+						"name": "",
+						"type": "string"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "string",
+						"name": "_gameID",
+						"type": "string"
+					},
+					{
+						"internalType": "uint8",
+						"name": "_numOfPlayers",
+						"type": "uint8"
+					}
+				],
+				"name": "createGame",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "string",
+						"name": "_gameID",
+						"type": "string"
+					}
+				],
+				"name": "deleteGame",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "string",
+						"name": "_gameID",
+						"type": "string"
+					}
+				],
+				"name": "endVote",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "string",
+						"name": "_gameID",
+						"type": "string"
+					}
+				],
+				"name": "joinGame",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "string",
+						"name": "_gameID",
+						"type": "string"
+					}
+				],
+				"name": "leaveGame",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "string",
+						"name": "_gameID",
+						"type": "string"
+					},
+					{
+						"internalType": "bytes1",
+						"name": "_letter",
+						"type": "bytes1"
+					}
+				],
+				"name": "voteForLetter",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			}
+		],
+		"devdoc": {
+			"kind": "dev",
+			"methods": {
+				"createGame(string,uint8)": {
+					"params": {
+						"_gameID": "Identifier for the game.",
+						"_numOfPlayers": "The maximum number of players > 0, <= MAX_PLAYERS."
+					}
+				},
+				"deleteGame(string)": {
+					"params": {
+						"_gameID": "Identifier for the game."
+					}
+				},
+				"endVote(string)": {
+					"params": {
+						"_gameID": "Identifier for the game."
+					}
+				},
+				"joinGame(string)": {
+					"params": {
+						"_gameID": "Identifier for the game."
+					}
+				},
+				"leaveGame(string)": {
+					"params": {
+						"_gameID": "Identifier for the game."
+					}
+				},
+				"voteForLetter(string,bytes1)": {
+					"params": {
+						"_gameID": "Identifier for the game.",
+						"_letter": "Letter to vote for."
+					}
+				}
+			},
+			"version": 1
+		},
+		"userdoc": {
+			"kind": "user",
+			"methods": {
+				"createGame(string,uint8)": {
+					"notice": "Create a new game, if there is space in the games array."
+				},
+				"deleteGame(string)": {
+					"notice": "Deletes an existing game."
+				},
+				"endVote(string)": {
+					"notice": "End a vote in case some players are not voting"
+				},
+				"joinGame(string)": {
+					"notice": "Join an active game."
+				},
+				"leaveGame(string)": {
+					"notice": "Leave the game at any time while its active."
+				},
+				"voteForLetter(string,bytes1)": {
+					"notice": "Vote for a letter in the hangman game."
+				}
+			},
+			"version": 1
+		}
+	},
+	"settings": {
+		"compilationTarget": {
+			"contracts/hangman.sol": "Hangman"
+		},
+		"evmVersion": "cancun",
+		"libraries": {},
+		"metadata": {
+			"bytecodeHash": "ipfs"
+		},
+		"optimizer": {
+			"enabled": false,
+			"runs": 200
+		},
+		"remappings": []
+	},
+	"sources": {
+		"contracts/hangman.sol": {
+			"keccak256": "0xdf37ab61a410d4ef798025e34c635c5bce931a9206956c13d43cf6c90333c5d8",
+			"license": "UNLICENSED",
+			"urls": [
+				"bzz-raw://e772bad2edd6b7dd40ac2d0fecf491137603e5cc83aedf8f138e768440af7174",
+				"dweb:/ipfs/QmPavMFF6wj5RwcbUdEAGNfFvHaZWq2ttqR9wFGVoSdjUh"
+			]
+		}
+	},
+	"version": 1
+}
