@@ -11,7 +11,7 @@ contract Hangman {
     uint256 public constant INACTIVITY_THRESHOLD = 15 minutes;
     uint256 public constant VOTING_DURATION = 5 minutes;
 
-    string[] private  WORDS = ["Apple", "Banana", "Cherry", "Durian", "Elderberry"];
+    string[] private  WORDS = ["apple", "banana", "cherry", "durian", "elderberry"];
 
     // -----------------------------------------------
     // Game Struct: Stores the state for a single game
@@ -21,22 +21,40 @@ contract Hangman {
         string   gameID;             // Human-readable name
 
         // Players
-        address                  creator;         // The address that created this game
-        uint8                    maxPlayers;      // Maximum amount of players that can join the game.
-        uint8                    currentPlayers;  // Number of players in the game 
-        mapping(address => bool) isPlayer;        // Lookup map for players in the game.
+        address                   creator;         // The address that created this game
+        uint8                     maxPlayers;      // Maximum amount of players that can join the game.
+        uint8                     currentPlayers;  // Number of players in the game 
+        address[MAX_PLAYERS]      players;         // Addresses of players
+        mapping(address => uint8) getPlayerIndex;  // Lookup map for players in the game.
 
         // Hangman-specific data
         string                   hiddenWord;       // Word to guess 
-        bool[]                   revealedLetters;  // Tracks which letters in hiddenWord are revealed
+        bytes1[]                 revealedLetters;  // Tracks which letters in hiddenWord are revealed
         uint8                    guessCount;       // Number of guesses
-        mapping(bytes1 => bool)  guessedLetters;   // Letter that have been guessed 
+        bytes1[MAX_GUESSES]      guessedLetters;   // Letter that have been guessed 
+        mapping(bytes1 => bool)  hasBeenGuessed;   // Tracks if letter has been guessed 
 
         // Inactivity Tracking
         uint256 lastActionTimestamp;  // The last time this game was interacted with
 
         // Voting/Election state
         Vote vote;            
+    }
+
+    struct GameInfo {
+        string     gameID;              // Human-readable name
+        address    creator;             // The address that created this game
+        uint8      maxPlayers;          // Maximum amount of players that can join the game.
+        uint8      currentPlayers;      // Number of players in the game 
+        string     hiddenWord;          // Word to guess 
+        bytes1[]   revealedLetters;     // Tracks which letters in hiddenWord are revealed
+        uint8      guessCount;          // Number of guesses
+        bytes1[]   guessedLetters;      // Letter that have been guessed 
+        uint256    lastActionTimestamp; // Timestamp of last action 
+        bool       votingActive;        // True when a voting round is active
+        uint256    voteStartTimestamp;  // Timestamp when voting started
+        uint8      voteCount;           // Number of players that voted
+        VoteInfo[] votes;               // Votes by players
     }
 
     // -----------------------------------------------
@@ -70,7 +88,7 @@ contract Hangman {
     // -----------------------------------------
     Game[MAX_GAMES] private games;
     mapping(string => uint8) private getGameIndex;
-    uint8 public numOfActivegames = 0;
+    uint8 public numOfActiveGames = 0;
 
 
     // -----------------------------------------
@@ -86,7 +104,7 @@ contract Hangman {
 
     modifier isPlayer(string memory gameID) {
         require(
-            games[getGameIndex[gameID] - 1].isPlayer[msg.sender],
+            games[getGameIndex[gameID] - 1].getPlayerIndex[msg.sender] > 0,
             "You are not a player of this game"
         );
         _;
@@ -95,14 +113,14 @@ contract Hangman {
     // -----------------------------------------
     // Events
     // -----------------------------------------
-    event GameCreated(string indexed gameID, uint8 numOfPlayers);
-    event GameEnded(string indexed gameID, GameResult result, string solution);
-    event PlayerJoined(string indexed gameID, address indexed player);
-    event PlayerLeft(string indexed gameID, address indexed player);
-    event VoteRegistered(string gameID, address indexed player, bytes1 letter);
-    event VoteUnregistered(string gameID, address indexed player, bytes1 letter);
-    event VoteStarted(string indexed gameID);
-    event VoteEnded(string indexed gameID, bytes1 chosenLetter, string maskedWord, bool error);
+    event GameCreated(string gameID, uint8 numOfPlayers);
+    event GameEnded(string gameID, GameResult result, string solution);
+    event PlayerJoined(string gameID, address player);
+    event PlayerLeft(string gameID, address player);
+    event VoteRegistered(string gameID, address player, bytes1 letter);
+    event VoteUnregistered(string gameID, address player, bytes1 letter);
+    event VoteStarted(string gameID);
+    event VoteEnded(string gameID, bytes1 chosenLetter, string maskedWord, bool error);
 
     // -----------------------------------------
     // Public / External Functions
@@ -147,7 +165,7 @@ contract Hangman {
             )
         );
         game.hiddenWord = WORDS[randomNum % WORDS.length];
-        game.revealedLetters = new bool[](bytes(game.hiddenWord).length);
+        game.revealedLetters = new bytes1[](bytes(game.hiddenWord).length);
         game.lastActionTimestamp = block.timestamp;
         getGameIndex[_gameID] = gameIndex;
         emit GameCreated(_gameID, _numOfPlayers);
@@ -175,7 +193,7 @@ contract Hangman {
     function joinGame(string memory _gameID) external gameExists(_gameID) {
         Game storage game = games[getGameIndex[_gameID] - 1];
         require(
-            !game.isPlayer[msg.sender],
+            game.getPlayerIndex[msg.sender] == 0,
             "Already in the game"
         );
         require(
@@ -183,8 +201,7 @@ contract Hangman {
             "No more players slots available"
         );
 
-        game.isPlayer[msg.sender] = true;
-        emit PlayerJoined(_gameID, msg.sender);
+        _addPlayerToGame(game, msg.sender);
     }
 
     /**
@@ -226,7 +243,7 @@ contract Hangman {
             letter = bytes1(uint8(letter) - 32);
         }
         require(
-            !game.guessedLetters[letter],
+            !game.hasBeenGuessed[letter],
             "Letter has already been guessed"
         );
 
@@ -244,7 +261,7 @@ contract Hangman {
      * @notice End a vote in case some players are not voting
      * @param _gameID Identifier for the game.
      */
-    function endVote(string memory _gameID) external gameExists(_gameID) {
+    function endVote(string memory _gameID) external gameExists(_gameID) isPlayer(_gameID) {
         Game storage game = games[getGameIndex[_gameID] - 1];
         Vote storage vote = game.vote;
         require(
@@ -264,10 +281,10 @@ contract Hangman {
 
     function getActiveGameIDs() external view returns (string[] memory) {
 
-        if (numOfActivegames == 0) return new string[](0);
+        if (numOfActiveGames == 0) return new string[](0);
 
         // Create an array to store active game IDs
-        string[] memory activeGames = new string[](numOfActivegames);
+        string[] memory activeGames = new string[](numOfActiveGames);
         uint8 index;
 
         // Populate the active game IDs array
@@ -281,59 +298,25 @@ contract Hangman {
         return activeGames;
     }
 
-    function getGameByID(string memory _gameID)
-        external gameExists(_gameID)
-        view
-        returns (
-            address creator,
-            uint8 maxPlayers,
-            uint8 currentPlayers,
-            string memory hiddenWord,
-            bool[] memory revealedLetters,
-            uint8 guessCount,
-            uint256 lastActionTimestamp,
-            bool activeVote,
-            uint8 voteCount,
-            uint256 voteStartTimestamp,
-            VoteInfo[] memory
-        )
-    {
-        for (uint8 i = 0; i < MAX_GAMES; i++) {
-            if (
-                keccak256(bytes(games[i].gameID)) == keccak256(bytes(_gameID))
-            ) {
-                Game storage game = games[i];
-                uint8 count = game.vote.voteCount;
-                VoteInfo[] memory votes;
+    function getGameInfoByID(string memory _gameID) external gameExists(_gameID) view returns (GameInfo memory) {
+        Game storage game = games[getGameIndex[_gameID] - 1];
+        GameInfo memory info;
+        _setGameInfo(game, info);
+        return info;
+    }
 
-                if (game.vote.votingActive && count > 0) {
-                    votes = new VoteInfo[](count);
-                    for (i = 0; i < count; i++) {
-                        votes[i].player = game.vote.playersVoted[i];
-                        votes[i].letter = game.vote.playerVotes[votes[i].player];
-                    }
-                } else {
-                    votes = new VoteInfo[](0);
+    function getGameInfoForAll() external view returns (GameInfo[] memory) {
+        GameInfo[] memory infos = new GameInfo[](numOfActiveGames);
+        uint8 index = 0;
+
+        if (numOfActiveGames > 0){
+            for (uint i = 0; i < MAX_GAMES; i++){
+                if (bytes(games[i].gameID).length > 0){
+                    _setGameInfo(games[i], infos[index++]);
                 }
-
-                // Return all required fields
-                return (
-                    game.creator,
-                    game.maxPlayers,
-                    game.currentPlayers,
-                    game.hiddenWord,
-                    game.revealedLetters,
-                    game.guessCount,
-                    game.lastActionTimestamp,
-                    game.vote.votingActive,
-                    game.vote.voteCount,
-                    game.vote.voteStartTimestamp,
-                    votes
-                );
             }
         }
-
-        revert("Game not found");
+        return infos;
     }
 
     // -----------------------------------------
@@ -347,13 +330,13 @@ contract Hangman {
         for (uint8 i = 0; i < games.length; i++) {
             Game storage game = games[i];
             if (getGameIndex[game.gameID] == 0) {
-                numOfActivegames++;
+                numOfActiveGames++;
                 return i + 1;
             }
             // Cancel game that has been idle for too long.
             if (block.timestamp - game.lastActionTimestamp > INACTIVITY_THRESHOLD) {
                 _endGame(game, GameResult.CANCELLED);
-                numOfActivegames++;
+                numOfActiveGames++;
                 return i + 1;
             }
         }
@@ -362,9 +345,40 @@ contract Hangman {
     function _endGame(Game storage game, GameResult result) private {
         emit GameEnded(game.gameID, result, game.hiddenWord);
         uint8 index = getGameIndex[game.gameID];
+
+        if (game.vote.votingActive) {
+            for (uint i = 0; i < game.vote.voteCount; i++) {
+                delete game.vote.playerVotes[game.vote.playersVoted[i]];
+            }
+        }
+
+        if (game.vote.votingActive) {
+            for (uint i = 0; i < game.vote.voteCount; i++) {
+                delete game.vote.playerVotes[game.vote.playersVoted[i]];
+            }
+        }
+
+        if (game.currentPlayers > 0) {
+            for (uint i = 0; i < MAX_PLAYERS; i++) {
+                if (game.players[i] != address(0)) {
+                    delete game.getPlayerIndex[game.players[i]];
+                }
+            }
+        }
+
+        for (uint i = 0; i < game.guessCount; i++) {
+            delete game.hasBeenGuessed[game.guessedLetters[i]];
+        }
+
+        for (uint i = 0; i < game.revealedLetters.length; i++) {
+            if (game.revealedLetters[i] != bytes1(0)) {
+                delete game.hasBeenGuessed[game.revealedLetters[i]];
+            }
+        }
+
         delete getGameIndex[game.gameID];
         delete games[index - 1];
-        numOfActivegames--;
+        numOfActiveGames--;
     }
 
     function _registerVote(string storage gameID, Vote storage vote, address player, bytes1 letter) private {
@@ -386,7 +400,8 @@ contract Hangman {
         bool move = false;
         for (uint i = 0; i < vote.voteCount; i++) {
             if (vote.playersVoted[i] == player) {
-                vote.playersVoted[i] = address(0);
+                delete vote.playersVoted[i];
+                delete vote.playerVotes[player];
                 move = true;
                 continue;
             } else if (move) {
@@ -421,10 +436,10 @@ contract Hangman {
         bytes memory maskedWord = bytes(game.hiddenWord); 
         for (uint i = 0; i < bytes(maskedWord).length; i++) {
             if (maskedWord[i] == voted_letter) {
-                game.guessedLetters[voted_letter] = true;
-                game.revealedLetters[i] = true;
+                game.hasBeenGuessed[voted_letter] = true;
+                game.revealedLetters[i] = voted_letter;
                 hit = true;
-            } else if (!game.revealedLetters[i]) {
+            } else if (game.revealedLetters[i] == bytes1(0)) {
                 maskedWord[i] = "_";
                 done = false;
             }
@@ -433,6 +448,8 @@ contract Hangman {
         delete game.vote;
         emit VoteEnded(game.gameID, voted_letter, string(maskedWord), !hit);
         if (!hit) {
+            game.hasBeenGuessed[voted_letter] = true;
+            game.guessedLetters[game.guessCount] = voted_letter;
             game.guessCount += 1;
             if (game.guessCount == MAX_GUESSES) {
                 _endGame(game, GameResult.LOST);
@@ -443,13 +460,19 @@ contract Hangman {
     }
 
     function _addPlayerToGame(Game storage game, address player) private {
-        game.isPlayer[player] = true;
-        game.currentPlayers += 1;
+        for (uint8 i = 0; i < MAX_PLAYERS; i++){
+            if (game.players[i] == address(0)) {
+                game.getPlayerIndex[player] = i + 1;
+                game.players[i] = player;
+                game.currentPlayers += 1;
+                return;
+            }
+        }
     }
 
     function _removePlayerFromGame(Game storage game, address player) private {
-        game.isPlayer[player] = false;
-        game.currentPlayers -= 1;
+        delete game.players[game.getPlayerIndex[player]];
+        game.getPlayerIndex[player] = 0;
 
         // Remove vote if present
         Vote storage vote = game.vote;
@@ -461,5 +484,31 @@ contract Hangman {
             game.creator = address(0);
         }
         emit PlayerLeft(game.gameID, player);
+    }
+
+    function _setGameInfo(Game storage game, GameInfo memory info) private view {
+        uint8 i;
+        info.gameID = game.gameID;
+        info.creator = game.creator;
+        info.maxPlayers = game.maxPlayers;
+        info.currentPlayers = game.currentPlayers;
+        info.hiddenWord = game.hiddenWord;
+        info.revealedLetters = game.revealedLetters;
+        info.guessCount = game.guessCount;
+        info.guessedLetters = new bytes1[](info.guessCount);
+        info.lastActionTimestamp = game.lastActionTimestamp;
+        info.votingActive = game.vote.votingActive;
+        info.voteStartTimestamp = game.vote.voteStartTimestamp;
+        info.voteCount = game.vote.voteCount;
+        info.votes = new VoteInfo[](info.voteCount);
+
+        for (i = 0; i < info.guessCount; i++){
+            info.guessedLetters[i] = game.guessedLetters[i];
+        }
+
+        for (i = 0; i < info.voteCount; i++){
+            info.votes[i].player = game.vote.playersVoted[i];
+            info.votes[i].letter = game.vote.playerVotes[info.votes[i].player];
+        }
     }
 }
