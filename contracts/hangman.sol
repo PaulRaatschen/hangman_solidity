@@ -11,7 +11,7 @@ contract Hangman {
     uint256 public constant INACTIVITY_THRESHOLD = 15 minutes;
     uint256 public constant VOTING_DURATION = 5 minutes;
 
-    string[] public WORDS = ["Apple", "Banana", "Cherry", "Durian", "Elderberry"];
+    string[] private  WORDS = ["Apple", "Banana", "Cherry", "Durian", "Elderberry"];
 
     // -----------------------------------------------
     // Game Struct: Stores the state for a single game
@@ -51,6 +51,14 @@ contract Hangman {
         mapping(bytes1 => uint8)   letterCounts;         // Number of votes for each letter
     }
 
+    // -----------------------------------------------
+    // VoteInfo Struct: Describes the vote of a single player
+    // -----------------------------------------------
+    struct VoteInfo {
+        address player;  // Address of playerr
+        bytes1 letter;   // Letter player voted for
+    }
+
     enum GameResult {
         WON,          // The players guessed the word correctly
         LOST,         // The players used up all wrong guesses
@@ -61,7 +69,8 @@ contract Hangman {
     // Global variables
     // -----------------------------------------
     Game[MAX_GAMES] private games;
-    mapping(string => uint8) public getGameIndex;
+    mapping(string => uint8) private getGameIndex;
+    uint8 public numOfActivegames = 0;
 
 
     // -----------------------------------------
@@ -109,6 +118,10 @@ contract Hangman {
         uint8 _numOfPlayers
     ) external {
         // Requirements
+        require(
+            bytes(_gameID).length > 0,
+            "The game ID cannot be empty"
+        );
         require(
             getGameIndex[_gameID] == 0,
             "A game with the chosen ID already exists"
@@ -162,12 +175,12 @@ contract Hangman {
     function joinGame(string memory _gameID) external gameExists(_gameID) {
         Game storage game = games[getGameIndex[_gameID] - 1];
         require(
-            game.currentPlayers < game.maxPlayers,
-            "No more players slots available"
-        );
-        require(
             !game.isPlayer[msg.sender],
             "Already in the game"
+        );
+        require(
+            game.currentPlayers < game.maxPlayers,
+            "No more players slots available"
         );
 
         game.isPlayer[msg.sender] = true;
@@ -203,10 +216,10 @@ contract Hangman {
             vote.playerVotes[msg.sender] == 0,
             "You already voted"
         );
-        bool uppercase = letter >= bytes1("A") && letter >= bytes1("Z");
+        bool uppercase = letter >= bytes1("A") && letter <= bytes1("Z");
         require(
-            uppercase || (letter >= bytes1("a") && letter >= bytes1("z")),
-            "Letter must be in A-Z a-z"
+            uppercase || (letter >= bytes1("a") && letter <= bytes1("z")),
+            "Letter must be in A-Z or a-z"
         );
         // Convert upper to lowercase
         if (uppercase) {
@@ -245,6 +258,83 @@ contract Hangman {
         _endVote(game);
     }
 
+    // -----------------------------------------
+    // Public getter functions
+    // -----------------------------------------
+
+    function getActiveGameIDs() external view returns (string[] memory) {
+
+        if (numOfActivegames == 0) return new string[](0);
+
+        // Create an array to store active game IDs
+        string[] memory activeGames = new string[](numOfActivegames);
+        uint8 index;
+
+        // Populate the active game IDs array
+        for (uint8 i = 0; i < MAX_GAMES; i++) {
+            if (bytes(games[i].gameID).length > 0) {
+                activeGames[index] = games[i].gameID;
+                index++;
+            }
+        }
+
+        return activeGames;
+    }
+
+    function getGameByID(string memory _gameID)
+        external gameExists(_gameID)
+        view
+        returns (
+            address creator,
+            uint8 maxPlayers,
+            uint8 currentPlayers,
+            string memory hiddenWord,
+            bool[] memory revealedLetters,
+            uint8 guessCount,
+            uint256 lastActionTimestamp,
+            bool activeVote,
+            uint8 voteCount,
+            uint256 voteStartTimestamp,
+            VoteInfo[] memory
+        )
+    {
+        for (uint8 i = 0; i < MAX_GAMES; i++) {
+            if (
+                keccak256(bytes(games[i].gameID)) == keccak256(bytes(_gameID))
+            ) {
+                Game storage game = games[i];
+                uint8 count = game.vote.voteCount;
+                VoteInfo[] memory votes;
+
+                if (game.vote.votingActive && count > 0) {
+                    votes = new VoteInfo[](count);
+                    for (i = 0; i < count; i++) {
+                        votes[i].player = game.vote.playersVoted[i];
+                        votes[i].letter = game.vote.playerVotes[votes[i].player];
+                    }
+                } else {
+                    votes = new VoteInfo[](0);
+                }
+
+                // Return all required fields
+                return (
+                    game.creator,
+                    game.maxPlayers,
+                    game.currentPlayers,
+                    game.hiddenWord,
+                    game.revealedLetters,
+                    game.guessCount,
+                    game.lastActionTimestamp,
+                    game.vote.votingActive,
+                    game.vote.voteCount,
+                    game.vote.voteStartTimestamp,
+                    votes
+                );
+            }
+        }
+
+        revert("Game not found");
+    }
 
     // -----------------------------------------
     // Maintenance (Marking stale games, etc.)
@@ -256,11 +346,14 @@ contract Hangman {
     function _allocateGame() private returns (uint8) {
         for (uint8 i = 0; i < games.length; i++) {
             Game storage game = games[i];
-            if (getGameIndex[game.gameID] == 0) return i + 1;
-
+            if (getGameIndex[game.gameID] == 0) {
+                numOfActivegames++;
+                return i + 1;
+            }
             // Cancel game that has been idle for too long.
             if (block.timestamp - game.lastActionTimestamp > INACTIVITY_THRESHOLD) {
                 _endGame(game, GameResult.CANCELLED);
+                numOfActivegames++;
                 return i + 1;
             }
         }
@@ -271,6 +364,7 @@ contract Hangman {
         uint8 index = getGameIndex[game.gameID];
         delete getGameIndex[game.gameID];
         delete games[index - 1];
+        numOfActivegames--;
     }
 
     function _registerVote(string storage gameID, Vote storage vote, address player, bytes1 letter) private {
