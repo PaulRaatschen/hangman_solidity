@@ -408,8 +408,10 @@ contract Hangman {
 
         // Determine letter that won vote
         for (uint i = 0; i < vote.voteCount; i++) {
-            bytes1 letter = vote.playerVotes[vote.playersVoted[i]];
+            address player = vote.playersVoted[i];
+            bytes1 letter = vote.playerVotes[player];
             uint8 count = vote.letterCounts[letter];
+            delete vote.playerVotes[player];
 
             if (count > max) {
                 voted_letter = letter;
