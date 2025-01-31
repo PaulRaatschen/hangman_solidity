@@ -7,7 +7,7 @@ contract Hangman {
     // -----------------------------------------
     uint8 public constant MAX_PLAYERS = 5;
     uint8 public constant MAX_GAMES = 5;
-    uint8 public constant MAX_GUESSES = 6;
+    uint8 public constant MAX_GUESSES = 5;
     uint256 public constant INACTIVITY_THRESHOLD = 15 minutes;
     uint256 public constant VOTING_DURATION = 5 minutes;
 
@@ -44,6 +44,7 @@ contract Hangman {
     struct GameInfo {
         string     gameID;              // Human-readable name
         address    creator;             // The address that created this game
+        address[]  players;             // Addresses of players in the game
         uint8      maxPlayers;          // Maximum amount of players that can join the game.
         uint8      currentPlayers;      // Number of players in the game 
         string     hiddenWord;          // Word to guess 
@@ -384,7 +385,7 @@ contract Hangman {
     function _registerVote(string storage gameID, Vote storage vote, address player, bytes1 letter) private {
         vote.playersVoted[vote.voteCount] = player;
         vote.playerVotes[player] = letter;
-        vote.letterCounts[letter] += 1;
+        vote.letterCounts[letter]++;
         vote.voteCount += 1;
         if (!vote.votingActive) {
             vote.votingActive = true;
@@ -402,6 +403,7 @@ contract Hangman {
             if (vote.playersVoted[i] == player) {
                 delete vote.playersVoted[i];
                 delete vote.playerVotes[player];
+                vote.letterCounts[letter]--;
                 move = true;
                 continue;
             } else if (move) {
@@ -426,11 +428,18 @@ contract Hangman {
             address player = vote.playersVoted[i];
             bytes1 letter = vote.playerVotes[player];
             uint8 count = vote.letterCounts[letter];
-            delete vote.playerVotes[player];
 
             if (count > max) {
                 voted_letter = letter;
+                max = count;
             }
+        }
+
+        for(uint i = 0; i < vote.voteCount; i++){
+            address player = vote.playersVoted[i];
+            bytes1 letter = vote.playerVotes[player];
+            delete vote.playerVotes[player];
+            delete vote.letterCounts[letter];
         }
 
         bytes memory maskedWord = bytes(game.hiddenWord); 
@@ -464,7 +473,7 @@ contract Hangman {
             if (game.players[i] == address(0)) {
                 game.getPlayerIndex[player] = i + 1;
                 game.players[i] = player;
-                game.currentPlayers += 1;
+                game.currentPlayers++;
                 return;
             }
         }
@@ -473,6 +482,7 @@ contract Hangman {
     function _removePlayerFromGame(Game storage game, address player) private {
         delete game.players[game.getPlayerIndex[player]];
         game.getPlayerIndex[player] = 0;
+        game.currentPlayers--;
 
         // Remove vote if present
         Vote storage vote = game.vote;
@@ -487,9 +497,11 @@ contract Hangman {
     }
 
     function _setGameInfo(Game storage game, GameInfo memory info) private view {
+        uint8 index = 0;
         uint8 i;
         info.gameID = game.gameID;
         info.creator = game.creator;
+        info.players = new address[](game.currentPlayers);
         info.maxPlayers = game.maxPlayers;
         info.currentPlayers = game.currentPlayers;
         info.hiddenWord = game.hiddenWord;
@@ -501,6 +513,12 @@ contract Hangman {
         info.voteStartTimestamp = game.vote.voteStartTimestamp;
         info.voteCount = game.vote.voteCount;
         info.votes = new VoteInfo[](info.voteCount);
+
+        for (i = 0; i < MAX_PLAYERS; i++) {
+            if (game.players[i] != address(0)) {
+                info.players[index++] = game.players[i];
+            }
+        }
 
         for (i = 0; i < info.guessCount; i++){
             info.guessedLetters[i] = game.guessedLetters[i];
