@@ -227,6 +227,7 @@ contract Hangman {
      * @param _vote Letter to vote for.
      */
     function voteForLetter(string memory _gameID, string memory _vote) external gameExists(_gameID) isPlayer(_gameID) {
+        require(bytes(_vote).length == 1, "Vote has to be a single letter");
         bytes1 letter = bytes(_vote)[0];
         Game storage game = games[getGameIndex[_gameID] - 1];
         Vote storage vote = game.vote;
@@ -353,12 +354,6 @@ contract Hangman {
             }
         }
 
-        if (game.vote.votingActive) {
-            for (uint i = 0; i < game.vote.voteCount; i++) {
-                delete game.vote.playerVotes[game.vote.playersVoted[i]];
-            }
-        }
-
         if (game.currentPlayers > 0) {
             for (uint i = 0; i < MAX_PLAYERS; i++) {
                 if (game.players[i] != address(0)) {
@@ -407,9 +402,8 @@ contract Hangman {
                 move = true;
                 continue;
             } else if (move) {
-                address tmp = vote.playersVoted[i-1];
                 vote.playersVoted[i-1] = vote.playersVoted[i];
-                vote.playersVoted[i] = tmp;
+                vote.playersVoted[i] = address(0);
             }
         }
         vote.voteCount -= 1;
@@ -474,6 +468,7 @@ contract Hangman {
                 game.getPlayerIndex[player] = i + 1;
                 game.players[i] = player;
                 game.currentPlayers++;
+                emit PlayerJoined(game.gameID, player);
                 return;
             }
         }
